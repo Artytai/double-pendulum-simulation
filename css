@@ -1,0 +1,32 @@
+:root{
+  --bg:#0d1021;--fg:#e9ecff;--sub:#9fa6d2;--card:#14183a;--edge:#232a66;
+  --a:#7cdfff;--b:#ff7cf5;--c:#ffd166;--ok:#46fca3;--warn:#ff5964;--ens:#8aff9a
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:radial-gradient(1200px 800px at 70% 10%,#131842 0%,var(--bg) 60%);color:var(--fg);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial}
+.top{display:flex;justify-content:space-between;align-items:end;padding:14px 18px;border-bottom:1px solid var(--edge);background:linear-gradient(180deg,#171c45,#10143a)}
+.top .brand{font-weight:700;letter-spacing:.4px}
+.top .tags{color:var(--sub);font-size:12px}
+.layout{display:grid;grid-template-columns:1.6fr 1fr;gap:14px;padding:12px}
+.left{position:relative;border:1px solid var(--edge);border-radius:10px;background:var(--card);overflow:hidden}
+#view{display:block;width:100%;height:auto;background:radial-gradient(900px 520px at 50% 35%,#0e1233 0%,#0a0f29 62%)}
+.overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;display:flex;justify-content:space-between}
+.hud{margin:10px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;display:grid;grid-auto-flow:column;gap:10px;backdrop-filter:blur(6px);font-size:12px}
+.legend{margin:10px 10px 0 auto;background:rgba(0,0,0,.2);padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.06);height:max-content;font-size:12px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.dot.a{background:var(--a)}
+.dot.b{background:var(--b)}
+.dot.c{background:var(--c)}
+.dot.d{background:var(--ens)}
+.dot.e{background:var(--warn)}
+.right{display:grid;gap:12px}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:10px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.row.small{font-size:12px;color:var(--sub)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+button,select,input[type="number"],input[type="range"]{background:#1a1f4b;color:var(--fg);border:1px solid #2b3278;border-radius:8px;padding:7px 10px}
+button:hover,select:hover{border-color:#3a42a6;cursor:pointer}
+label{display:grid;grid-template-columns:1fr auto;gap:8px;font-size:12px;color:#cdd3ff;align-items:center}
+label span{min-width:56px;text-align:right;color:var(--a);font-variant-numeric:tabular-nums}
+canvas#phase,canvas#energy,canvas#strobe{width:100%;height:auto;background:#0a0f29;border:1px dashed #2a307a;border-radius:6px}
+@media (max-width: 1100px){.layout{grid-template-columns:1fr}.right{order:2}}
