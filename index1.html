@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Double Pendulum — Advanced Physics Lab (Single File)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+:root{
+  --bg:#0d1021;--fg:#e9ecff;--sub:#9fa6d2;--card:#14183a;--edge:#232a66;
+  --a:#7cdfff;--b:#ff7cf5;--c:#ffd166;--ok:#46fca3;--warn:#ff5964
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:radial-gradient(1200px 800px at 70% 10%,#131842 0%,var(--bg) 60%);color:var(--fg);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial}
+.top{display:flex;justify-content:space-between;align-items:end;padding:14px 18px;border-bottom:1px solid var(--edge);background:linear-gradient(180deg,#171c45,#10143a)}
+.top .brand{font-weight:700;letter-spacing:.4px}
+.top .tags{color:var(--sub);font-size:12px}
+.layout{display:grid;grid-template-columns:1.6fr 1fr;gap:14px;padding:12px}
+.left{position:relative;border:1px solid var(--edge);border-radius:10px;background:var(--card);overflow:hidden}
+#view{display:block;width:100%;height:auto;background:radial-gradient(900px 520px at 50% 35%,#0e1233 0%,#0a0f29 62%)}
+.overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;display:flex;justify-content:space-between}
+.hud{margin:10px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;display:grid;grid-auto-flow:column;gap:10px;backdrop-filter:blur(6px);font-size:12px}
+.legend{margin:10px 10px 0 auto;background:rgba(0,0,0,.2);padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.06);height:max-content;font-size:12px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.dot.a{background:var(--a)} .dot.b{background:var(--b)} .dot.c{background:var(--c)}
+.right{display:grid;gap:12px}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:10px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.row.small{font-size:12px;color:var(--sub)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+button,select,input[type="number"],input[type="range"],input[type="file"]{background:#1a1f4b;color:var(--fg);border:1px solid #2b3278;border-radius:8px;padding:7px 10px}
+button:hover,select:hover{border-color:#3a42a6;cursor:pointer}
+label{display:grid;grid-template-columns:1fr auto;gap:8px;font-size:12px;color:#cdd3ff;align-items:center}
+label span{min-width:56px;text-align:right;color:var(--a);font-variant-numeric:tabular-nums}
+canvas#phase,canvas#energy,canvas#strobe{width:100%;height:auto;background:#0a0f29;border:1px dashed #2a307a;border-radius:6px}
+@media (max-width: 1100px){.layout{grid-template-columns:1fr}.right{order:2}}
+kbd{background:#111642;border:1px solid #2a307a;border-radius:4px;padding:0 6px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Double Pendulum — Advanced Physics Lab</div>
+  <div class="tags">Rigid • String • Spring • RK45 • Energy Guard • Lyapunov • Poincaré • Ensemble</div>
+</header>
+
+<main class="layout">
+  <section class="left">
+    <canvas id="view" width="1200" height="720"></canvas>
+    <div class="overlay">
+      <div class="hud">
+        <span>t <b id="t">0.000</b></span>
+        <span>θ₁ <b id="th1">0.000</b></span>
+        <span>θ₂ <b id="th2">0.000</b></span>
+        <span>ω₁ <b id="w1">0.000</b></span>
+        <span>ω₂ <b id="w2">0.000</b></span>
+        <span>T <b id="Te">0.000</b></span>
+        <span>V <b id="Ve">0.000</b></span>
+        <span>E <b id="Ee">0.000</b></span>
+        <span>FPS <b id="fps">0</b></span>
+        <span>λ <b id="lyap">—</b></span>
+      </div>
+      <div class="legend">
+        <div><i class="dot a"></i> base</div>
+        <div><i class="dot b"></i> twin</div>
+        <div><i class="dot c"></i> magnet (right‑click)</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="right">
+    <div class="card">
+      <div class="row">
+        <button id="play">▶</button>
+        <button id="pause">⏸</button>
+        <button id="step">⏭</button>
+        <button id="reset">⟲</button>
+        <button id="random">🎲</button>
+        <button id="shot">📷 PNG</button>
+      </div>
+      <div class="row">
+        <label>Mode
+          <select id="mode">
+            <option value="rigid">Rigid</option>
+            <option value="string">String</option>
+            <option value="spring">Spring</option>
+          </select>
+        </label>
+        <label>Integrator
+          <select id="integrator">
+            <option value="rk4">RK4</option>
+            <option value="rk45">RK45</option>
+            <option value="verlet">Verlet</option>
+            <option value="semi">Semi</option>
+            <option value="euler">Euler</option>
+          </select>
+        </label>
+        <label>dt <input id="dt" type="number" step="0.001" value="0.004"></label>
+        <label>Slow <input id="slow" type="checkbox"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="grid2">
+        <label>g <input id="g" type="range" min="0.1" max="25" step="0.01" value="9.81"><span id="g_v">9.81</span></label>
+        <label>m1 <input id="m1" type="range" min="0.05" max="6" step="0.01" value="1"><span id="m1_v">1.00</span></label>
+        <label>m2 <input id="m2" type="range" min="0.05" max="6" step="0.01" value="1"><span id="m2_v">1.00</span></label>
+        <label>l1 <input id="l1" type="range" min="0.2" max="3" step="0.01" value="1"><span id="l1_v">1.00</span></label>
+        <label>l2 <input id="l2" type="range" min="0.2" max="3" step="0.01" value="1"><span id="l2_v">1.00</span></label>
+        <label>rod m₁ <input id="rm1" type="range" min="0" max="3" step="0.01" value="0"><span id="rm1_v">0.00</span></label>
+        <label>rod m₂ <input id="rm2" type="range" min="0" max="3" step="0.01" value="0"><span id="rm2_v">0.00</span></label>
+        <label>b₁ <input id="b1" type="range" min="0" max="0.5" step="0.001" value="0.01"><span id="b1_v">0.010</span></label>
+        <label>b₂ <input id="b2" type="range" min="0" max="0.5" step="0.001" value="0.01"><span id="b2_v">0.010</span></label>
+        <label>quad drag <input id="qd" type="range" min="0" max="0.8" step="0.001" value="0"><span id="qd_v">0.000</span></label>
+        <label>px/m <input id="scale" type="range" min="80" max="320" step="1" value="160"><span id="scale_v">160</span></label>
+        <label>trail <input id="trail" type="range" min="50" max="3000" step="10" value="1500"><span id="trail_v">1500</span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="grid2">
+        <label>θ₁ <input id="ic_th1" type="number" step="0.001" value="1.5708"></label>
+        <label>θ₂ <input id="ic_th2" type="number" step="0.001" value="1.5708"></label>
+        <label>ω₁ <input id="ic_w1" type="number" step="0.001" value="0"></label>
+        <label>ω₂ <input id="ic_w2" type="number" step="0.001" value="0"></label>
+      </div>
+      <div class="row">
+        <button id="applyIC">Apply</button>
+        <label><input id="dragSet" type="checkbox"> Drag‑to‑Set</label>
+        <label><input id="grab2" type="checkbox" checked> Grab Bob 2</label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label><input id="twin" type="checkbox"> Twin</label>
+        <label>Δ° <input id="twinDelta" type="number" step="0.0001" value="0.001"></label>
+        <label><input id="ensemble" type="checkbox"> Ensemble (6)</label>
+        <label><input id="showPhase" type="checkbox" checked> Phase</label>
+        <label><input id="showEnergy" type="checkbox" checked> Energy</label>
+        <label><input id="showStrobe" type="checkbox"> Strobe</label>
+      </div>
+      <div class="row">
+        <label><input id="mag" type="checkbox"> Magnet</label>
+        <label>k <input id="magK" type="range" min="-2000" max="2000" step="10" value="600"><span id="magK_v">600</span></label>
+        <label>spring k <input id="sk" type="range" min="0" max="800" step="1" value="260"><span id="sk_v">260</span></label>
+        <label>spring c <input id="sc" type="range" min="0" max="10" step="0.05" value="1"><span id="sc_v">1.00</span></label>
+      </div>
+      <canvas id="phase" width="520" height="150"></canvas>
+      <canvas id="energy" width="520" height="120"></canvas>
+      <canvas id="strobe" width="520" height="150"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label><input id="adaptive" type="checkbox" checked> Adaptive dt</label>
+        <label>min <input id="dtMin" type="number" step="0.001" value="0.002"></label>
+        <label>max <input id="dtMax" type="number" step="0.001" value="0.02"></label>
+        <label>ΔE/E tol <input id="etol" type="number" step="0.0001" value="0.002"></label>
+      </div>
+      <div class="row">
+        <button id="presetClassic">Preset: Classic</button>
+        <button id="presetWild">Preset: Wild</button>
+        <button id="presetDamped">Preset: Damped</button>
+        <button id="presetRope">Preset: Rope</button>
+        <button id="presetSpring">Preset: Spring</button>
+      </div>
+      <div class="row small">
+        Shortcuts:
+        <kbd>space</kbd> play/pause,
+        <kbd>S</kbd> step,
+        <kbd>R</kbd> reset,
+        <kbd>G</kbd> random,
+        <kbd>[</kbd>/<kbd>]</kbd> dt,
+        <kbd>P</kbd> PNG.
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* =======================================================================================
+ *  PHYSICS CORE (vectors, helpers, matrices)
+ * =======================================================================================
+ */
+const V = {
+  vec: (x=0, y=0) => ({ x, y }),
+  add: (a,b)=>({x:a.x+b.x, y:a.y+b.y}),
+  sub: (a,b)=>({x:a.x-b.x, y:a.y-b.y}),
+  mul: (a,s)=>({x:a.x*s, y:a.y*s}),
+  dot: (a,b)=>a.x*b.x + a.y*b.y,
+  len: a => Math.hypot(a.x, a.y),
+  norm: a => { const L = Math.hypot(a.x,a.y) || 1; return {x:a.x/L, y:a.y/L}; }
+};
+const U = {
+  rad: d => d * Math.PI / 180,
+  deg: r => r * 180 / Math.PI,
+  sgn: v => (v < 0 ? -1 : v > 0 ? 1 : 0),
+  clamp: (x, a, b) => Math.max(a, Math.min(b, x)),
+  wrapPI: r => {
+    let rr = r % (2*Math.PI);
+    if (rr > Math.PI) rr -= 2*Math.PI;
+    if (rr < -Math.PI) rr += 2*Math.PI;
+    return rr;
+  },
+  copy: a => a.slice(),
+};
+const M2 = {
+  inv: (a11,a12,a21,a22) => {
+    const det = a11*a22 - a12*a21;
+    if (Math.abs(det) < 1e-12) return null;
+    const invdet = 1/det;
+    return [ a22*invdet, -a12*invdet, -a21*invdet, a11*invdet ];
+  },
+  solve: (a11,a12,a21,a22, b1,b2) => {
+    const inv = M2.inv(a11,a12,a21,a22);
+    if (!inv) return null;
+    const [m11,m12,m21,m22] = inv;
+    return { x1: m11*b1 + m12*b2, x2: m21*b1 + m22*b2 };
+  }
+};
+
+/* =======================================================================================
+ *  BASE SYSTEM
+ * =======================================================================================
+ */
+class System {
+  constructor() { this.state = { t:0, y:[Math.PI/2, Math.PI/2, 0, 0] }; this.dt = 0.004; }
+  setDt(dt){ this.dt = dt; } getDt(){ return this.dt; }
+  getState(){ return { t:this.state.t, y:this.state.y.slice() }; }
+  setStateArray(y){ this.state.y = y.slice(); this.state.t = 0; }
+  deriv(t,y){ throw new Error('Not implemented'); }
+  onStepFinished(){}
+  energyTotal(y){ return 0; }
+  sample(){ return {}; }
+}
+
+/* =======================================================================================
+ *  RIGID DOUBLE PENDULUM (Lagrangian)
+ * =======================================================================================
+ */
+class DoublePendulumRigid extends System {
+  constructor(params){
+    super();
+    const P = {
+      g:9.81, l1:1, l2:1, m1:1, m2:1, rm1:0, rm2:0,
+      b1:0.01, b2:0.01, qd:0, mag:false, magK:600, magPos:{x:0.5,y:0.5}
+    };
+    Object.assign(P, params||{});
+    this.P = P;
+  }
+  setParams(p){Object.assign(this.P,p||{})}
+  setAngles(th1, th2, w1=0,w2=0){ this.state={t:0,y:[th1,th2,w1,w2]}; }
+
+  massMatrix(th1,th2){
+    const {l1,l2,m1,m2,rm1,rm2}=this.P;
+    const c = Math.cos(th1-th2);
+    let M11=(m1+m2)*l1*l1, M12=m2*l1*l2*c, M22=m2*l2*l2;
+    M11 += (rm1/3)*l1*l1; M22 += (rm2/3)*l2*l2;
+    return [M11,M12,M12,M22];
+  }
+  coriolisGravity(th1,th2,w1,w2){
+    const {g,l1,l2,m1,m2}=this.P;
+    const s = Math.sin(th1-th2);
+    const h1 = - m2*l1*l2*s*w2*w2 - 2*m2*l1*l2*s*w1*w2 + (m1+m2)*g*l1*Math.sin(th1);
+    const h2 =   m2*l1*l2*s*w1*w1 + m2*g*l2*Math.sin(th2);
+    return [h1,h2];
+  }
+  generalizedNonCons(th1,th2,w1,w2){
+    const {b1,b2,qd,l1,l2,mag,magK,magPos} = this.P;
+    let tau1=-b1*w1, tau2=-b2*w2;
+    if (qd!==0){
+      const v1=Math.abs(l1*w1), v2=Math.abs(l1*w1)+Math.abs(l2*w2);
+      tau1 += -qd*v1*v1*U.sgn(w1); tau2 += -qd*v2*v2*U.sgn(w2);
+    }
+    if (mag){
+      const x1=l1*Math.sin(th1), y1=l1*Math.cos(th1);
+      const x2=x1+l2*Math.sin(th2), y2=y1+l2*Math.cos(th2);
+      const r1={x:x1-magPos.x, y:y1-magPos.y}, r2={x:x2-magPos.x, y:y2-magPos.y};
+      const R1=Math.max(0.08,Math.hypot(r1.x,r1.y)), R2=Math.max(0.08,Math.hypot(r2.x,r2.y));
+      const F1=-magK/(R1*R1), F2=-magK/(R2*R2);
+      tau1 += F1*(r1.x*Math.cos(th1)-r1.y*Math.sin(th1));
+      tau2 += F2*(r2.x*Math.cos(th2)-r2.y*Math.sin(th2));
+    }
+    return [tau1,tau2];
+  }
+  alphas(th1,th2,w1,w2){
+    const [M11,M12,M21,M22] = this.massMatrix(th1,th2);
+    const [h1,h2] = this.coriolisGravity(th1,th2,w1,w2);
+    const [q1,q2] = this.generalizedNonCons(th1,th2,w1,w2);
+    const rhs1=-h1+q1, rhs2=-h2+q2;
+    const sol = M2.solve(M11,M12,M21,M22,rhs1,rhs2) || {x1:0,x2:0};
+    return [sol.x1, sol.x2];
+  }
+  deriv(t,y){
+    const [th1,th2,w1,w2] = y;
+    const [a1,a2] = this.alphas(th1,th2,w1,w2);
+    return [w1,w2,a1,a2];
+  }
+  position(th1,th2){
+    const {l1,l2}=this.P;
+    const x1=l1*Math.sin(th1), y1=l1*Math.cos(th1);
+    const x2=x1+l2*Math.sin(th2), y2=y1+l2*Math.cos(th2);
+    return {x1,y1,x2,y2};
+  }
+  energy(y){
+    const [th1,th2,w1,w2]=y;
+    const {m1,m2,l1,l2,g}=this.P;
+    const d=th2-th1;
+    const T=0.5*m1*l1*l1*w1*w1 + 0.5*m2*(l1*l1*w1*w1 + l2*l2*w2*w2 + 2*l1*l2*w1*w2*Math.cos(d));
+    const V=(m1+m2)*g*l1*(1-Math.cos(th1)) + m2*g*l2*(1-Math.cos(th2));
+    return {T,V,E:T+V};
+  }
+  tensions(y){
+    const [th1,th2,w1,w2]=y; const {l1,l2,m1,m2,g,qd}=this.P;
+    const [a1,a2] = this.alphas(th1,th2,w1,w2);
+    const x1=l1*Math.sin(th1), y1=l1*Math.cos(th1);
+    const vx1=l1*w1*Math.cos(th1), vy1=-l1*w1*Math.sin(th1);
+    const ax1=l1*a1*Math.cos(th1)-l1*w1*w1*Math.sin(th1);
+    const ay1=-l1*a1*Math.sin(th1)-l1*w1*w1*Math.cos(th1);
+    const x2=x1+l2*Math.sin(th2), y2=y1+l2*Math.cos(th2);
+    const vx2=vx1+l2*w2*Math.cos(th2), vy2=vy1 - l2*w2*Math.sin(th2);
+    const ax2=ax1+l2*a2*Math.cos(th2)-l2*w2*w2*Math.sin(th2);
+    const ay2=ay1-l2*a2*Math.sin(th2)-l2*w2*w2*Math.cos(th2);
+    const Fg1={x:0,y:g*m1}, Fg2={x:0,y:g*m2};
+    let Fd1={x:0,y:0}, Fd2={x:0,y:0};
+    if (qd!==0){
+      const v1=V.vec(vx1,vy1), v2=V.vec(vx2,vy2);
+      Fd1 = V.mul(V.norm(v1), -qd*V.len(v1)*V.len(v1));
+      Fd2 = V.mul(V.norm(v2), -qd*V.len(v2)*V.len(v2));
+    }
+    const F1={x:m1*ax1-Fg1.x-Fd1.x, y:m1*ay1-Fg1.y-Fd1.y};
+    const F2={x:m2*ax2-Fg2.x-Fd2.x, y:m2*ay2-Fg2.y-Fd2.y};
+    const e1=V.norm({x:x1,y:y1}), e2=V.norm({x:x2-x1,y:y2-y1});
+    const T1 = F1.x*e1.x + F1.y*e1.y;
+    const T2 = F2.x*e2.x + F2.y*e2.y;
+    return {T1,T2};
+  }
+  sample(){
+    const [th1,th2,w1,w2]=this.state.y;
+    const pos=this.position(th1,th2); const en=this.energy(this.state.y);
+    const {T1,T2}=this.tensions(this.state.y);
+    return { t:this.state.t, th1,th2,w1,w2, ...pos, ...en, T1,T2 };
+  }
+  energyTotal(y){ return this.energy(y).E; }
+}
+
+/* =======================================================================================
+ *  ROPE / SPRING (string slack + Cartesian; spring soft torques)
+ * =======================================================================================
+ */
+class DoublePendulumRopeSpring extends System {
+  constructor(params){
+    super();
+    const P = { g:9.81, l1:1, l2:1, m1:1, m2:1, mode:"string", qd:0.02, sk:260, sc:1, slack1:false, slack2:false, mag:false, magK:600, magPos:{x:0.5,y:0.5} };
+    Object.assign(P, params||{});
+    this.P = P;
+    this.cart = { p1:V.vec(0,P.l1), v1:V.vec(0,0), p2:V.vec(0,P.l1+P.l2), v2:V.vec(0,0) };
+  }
+  setParams(p){Object.assign(this.P,p||{})}
+  setAngles(th1,th2,w1=0,w2=0){
+    this.state={t:0,y:[th1,th2,w1,w2]};
+    const {l1,l2}=this.P;
+    const x1=l1*Math.sin(th1), y1=l1*Math.cos(th1);
+    const x2=x1+l2*Math.sin(th2), y2=y1+l2*Math.cos(th2);
+    this.cart.p1=V.vec(x1,y1); this.cart.v1=V.vec(0,0);
+    this.cart.p2=V.vec(x2,y2); this.cart.v2=V.vec(0,0);
+    this.P.slack1=false; this.P.slack2=false;
+  }
+  anglesFromCartesian(){ const {p1,p2}=this.cart; return [Math.atan2(p1.x,p1.y), Math.atan2(p2.x-p1.x, p2.y-p1.y)]; }
+  _fakeRigid(){
+    const R=new DoublePendulumRigid({ g:this.P.g, l1:this.P.l1, l2:this.P.l2, m1:this.P.m1, m2:this.P.m2, b1:0,b2:0, qd:this.P.qd, mag:this.P.mag, magK:this.P.magK, magPos:this.P.magPos });
+    R.state=this.state; R.setDt(this.dt); return R;
+  }
+  deriv(t,y){
+    if (this.P.mode==='spring') return this.derivSpring(t,y);
+    return this.derivString(t,y);
+  }
+  derivSpring(t,y){
+    const [th1,th2,w1,w2]=y; const {g,l1,l2,m1,m2,sk,sc,qd,mag,magK,magPos}=this.P;
+    let tau1=-sc*w1, tau2=-sc*w2;
+    if (qd!==0){ const v1=Math.abs(l1*w1), v2=Math.abs(l1*w1)+Math.abs(l2*w2); tau1+=-qd*v1*v1*U.sgn(w1); tau2+=-qd*v2*v2*U.sgn(w2); }
+    if (mag){
+      const x1=l1*Math.sin(th1), y1=l1*Math.cos(th1); const x2=x1+l2*Math.sin(th2), y2=y1+l2*Math.cos(th2);
+      const r1={x:x1-magPos.x,y:y1-magPos.y}, r2={x:x2-magPos.x,y:y2-magPos.y};
+      const R1=Math.max(0.08,Math.hypot(r1.x,r1.y)), R2=Math.max(0.08,Math.hypot(r2.x,r2.y));
+      const F1=-magK/(R1*R1), F2=-magK/(R2*R2);
+      tau1 += F1*(r1.x*Math.cos(th1)-r1.y*Math.sin(th1)); tau2 += F2*(r2.x*Math.cos(th2)-r2.y*Math.sin(th2));
+    }
+    const c=Math.cos(th1-th2), s=Math.sin(th1-th2);
+    const M11=(m1+m2)*l1*l1, M12=m2*l1*l2*c, M22=m2*l2*l2, M21=M12;
+    const h1=- m2*l1*l2*s*w2*w2 - 2*m2*l1*l2*s*w1*w2 + (m1+m2)*g*l1*Math.sin(th1);
+    const h2=  m2*l1*l2*s*w1*w1 + m2*g*l2*Math.sin(th2);
+    const rhs1=-h1+tau1, rhs2=-h2+tau2;
+    const sol=M2.solve(M11,M12,M21,M22,rhs1,rhs2)||{x1:0,x2:0};
+    return [w1,w2,sol.x1,sol.x2];
+  }
+  derivString(t,y){
+    if (!this.P.slack1 && !this.P.slack2) return this._fakeRigid().deriv(t,y);
+    const [th1,th2,w1,w2]=y; return [w1,w2,0,0];
+  }
+  stepCartesian(dt){
+    if (this.P.mode!=='string') return;
+    const {l1,l2,m1,m2,qd,g,mag,magK,magPos} = this.P;
+    let {p1,p2,v1,v2} = this.cart;
+    const grav1=V.vec(0,g*m1), grav2=V.vec(0,g*m2);
+    const drag1=(qd!==0)?V.mul(V.norm(v1), -qd*V.len(v1)*V.len(v1)):V.vec(0,0);
+    const drag2=(qd!==0)?V.mul(V.norm(v2), -qd*V.len(v2)*V.len(v2)):V.vec(0,0);
+    let mag1=V.vec(0,0), mag2=V.vec(0,0);
+    if (mag){
+      const r1=V.sub(p1,magPos), r2=V.sub(p2,magPos);
+      const R1=Math.max(0.05,V.len(r1)), R2=Math.max(0.05,V.len(r2));
+      mag1=V.mul(V.norm(r1), -magK/(R1*R1)); mag2=V.mul(V.norm(r2), -magK/(R2*R2));
+    }
+    let a1=V.mul(V.add(grav1, V.add(drag1,mag1)), 1/m1), a2=V.mul(V.add(grav2, V.add(drag2,mag2)), 1/m2);
+    v1=V.add(v1, V.mul(a1,dt)); v2=V.add(v2, V.mul(a2,dt));
+    p1=V.add(p1, V.mul(v1,dt)); p2=V.add(p2, V.mul(v2,dt));
+    const d1=V.len(p1), d2=V.len(V.sub(p2,p1));
+    if (d1>=l1 && this.P.slack1){
+      const n=V.mul(p1, 1/(d1||1)); p1=V.mul(n,l1);
+      const vr=V.dot(v1,n); if (vr>0) v1=V.add(v1, V.mul(n,-vr));
+      this.P.slack1=false;
+    }
+    if (d2>=l2 && this.P.slack2){
+      const rel=V.sub(p2,p1); const n=V.mul(rel, 1/(V.len(rel)||1));
+      p2=V.add(p1, V.mul(n,l2));
+      const vr=V.dot(V.sub(v2,v1), n);
+      if (vr>0){ v2=V.add(v2, V.mul(n,-vr)); v1=V.add(v1, V.mul(n,(vr*m2)/m1)); }
+      this.P.slack2=false;
+    }
+    const [th1,th2]=this.anglesFromCartesian();
+    this.state.y[0]=th1; this.state.y[1]=th2;
+    this.cart={p1,p2,v1,v2};
+  }
+  tensionsFromAngles(y){ const r=this._fakeRigid(); r.state={t:this.state.t,y:y.slice()}; return r.tensions(y); }
+  sample(){
+    const [th1,th2,w1,w2]=this.state.y; const {l1,l2}=this.P;
+    const x1=l1*Math.sin(th1), y1=l1*Math.cos(th1);
+    const x2=x1+l2*Math.sin(th2), y2=y1+l2*Math.cos(th2);
+    const en=this.energy(this.state.y); const {T1,T2}=this.tensionsFromAngles(this.state.y);
+    return { t:this.state.t, th1,th2,w1,w2,x1,y1,x2,y2, ...en, T1,T2, slack1:this.P.slack1, slack2:this.P.slack2 };
+  }
+  energy(y){
+    const [th1,th2,w1,w2]=y; const {m1,m2,l1,l2,g}=this.P; const d=th2-th1;
+    const T=0.5*m1*l1*l1*w1*w1 + 0.5*m2*(l1*l1*w1*w1 + l2*l2*w2*w2 + 2*l1*l2*w1*w2*Math.cos(d));
+    const Vp=(m1+m2)*g*l1*(1-Math.cos(th1)) + m2*g*l2*(1-Math.cos(th2));
+    return {T,V:Vp,E:T+Vp};
+  }
+  energyTotal(y){ return this.energy(y).E; }
+}
+
+/* =======================================================================================
+ *  INTEGRATORS (Euler, Semi, Verlet, RK4, RK45)
+ * =======================================================================================
+ */
+class Integrators {
+  static euler(sys,t,y,dt){ const k=sys.deriv(t,y); return [t+dt, y.map((v,i)=>v+dt*k[i])]; }
+  static semi(sys,t,y,dt){ const k=sys.deriv(t,y); const [th1,th2,w1,w2]=y; const w1n=w1+dt*k[2], w2n=w2+dt*k[3]; return [t+dt,[th1+dt*w1n, th2+dt*w2n, w1n, w2n]]; }
+  static verlet(sys,t,y,dt){ const [th1,th2,w1,w2]=y; const k=sys.deriv(t,y); const a1=k[2],a2=k[3]; const th1p=th1+dt*w1+0.5*dt*dt*a1; const th2p=th2+dt*w2+0.5*dt*dt*a2; const yp=[th1p,th2p,w1,w2]; const k2=sys.deriv(t+dt,yp); const a1p=k2[2], a2p=k2[3]; const w1n=w1+0.5*dt*(a1+a1p); const w2n=w2+0.5*dt*(a2+a2p); return [t+dt,[th1p,th2p,w1n,w2n]]; }
+  static rk4(sys,t,y,dt){
+    const f=(tt,yy)=>sys.deriv(tt,yy);
+    const k1=f(t,y);
+    const y2=y.map((v,i)=>v+0.5*dt*k1[i]);
+    const k2=f(t+0.5*dt,y2);
+    const y3=y.map((v,i)=>v+0.5*dt*k2[i]);
+    const k3=f(t+0.5*dt,y3);
+    const y4=y.map((v,i)=>v+dt*k3[i]);
+    const k4=f(t+dt,y4);
+    const yn=y.map((v,i)=>v+(dt/6)*(k1[i]+2*k2[i]+2*k3[i]+k4[i]));
+    return [t+dt, yn];
+  }
+  static rk45(sys,t,y,dt){
+    const f=(tt,yy)=>sys.deriv(tt,yy);
+    const a2=1/5, a3=3/10, a4=4/5, a5=8/9, a6=1, a7=1;
+    const b21=1/5;
+    const b31=3/40, b32=9/40;
+    const b41=44/45, b42=-56/15, b43=32/9;
+    const b51=19372/6561, b52=-25360/2187, b53=64448/6561, b54=-212/729;
+    const b61=9017/3168, b62=-355/33, b63=46732/5247, b64=49/176, b65=-5103/18656;
+    const c1=35/384, c2=0, c3=500/1113, c4=125/192, c5=-2187/6784, c6=11/84;
+    const c1e=5179/57600, c2e=0, c3e=7571/16695, c4e=393/640, c5e=-92097/339200, c6e=187/2100, c7e=1/40;
+
+    const k1=f(t,y);
+    const y2=y.map((v,i)=>v+dt*( b21*k1[i] ));
+    const k2=f(t+a2*dt,y2);
+    const y3=y.map((v,i)=>v+dt*( b31*k1[i]+b32*k2[i] ));
+    const k3=f(t+a3*dt,y3);
+    const y4=y.map((v,i)=>v+dt*( b41*k1[i]+b42*k2[i]+b43*k3[i] ));
+    const k4=f(t+a4*dt,y4);
+    const y5=y.map((v,i)=>v+dt*( b51*k1[i]+b52*k2[i]+b53*k3[i]+b54*k4[i] ));
+    const k5=f(t+a5*dt,y5);
+    const y6=y.map((v,i)=>v+dt*( b61*k1[i]+b62*k2[i]+b63*k3[i]+b64*k4[i]+b65*k5[i] ));
+    const k6=f(t+a6*dt,y6);
+    const y5th=y.map((v,i)=>v+dt*( c1*k1[i]+c2*k2[i]+c3*k3[i]+c4*k4[i]+c5*k5[i]+c6*k6[i] ));
+    const k7=f(t+a7*dt,y5th);
+    const y4th=y.map((v,i)=>v+dt*( c1e*k1[i]+c2e*k2[i]+c3e*k3[i]+c4e*k4[i]+c5e*k5[i]+c6e*k6[i]+c7e*k7[i] ));
+    const err=Math.sqrt(y.length? y.reduce((s,_,i)=>{const d=y5th[i]-y4th[i];return s+d*d;},0)/y.length : 0);
+    return {t:t+dt, y:y5th, err};
+  }
+}
+
+/* =======================================================================================
+ *  ENERGY GUARD + ADAPTIVE CONTROLLER
+ * =======================================================================================
+ */
+class EnergyGuard {
+  constructor(sys, opts={}){
+    this.sys = sys;
+    this.integrator = opts.integrator || "rk4";
+    this.useRK45 = (this.integrator === "rk45");
+    this.dtMin = opts.dtMin ?? 0.001;
+    this.dtMax = opts.dtMax ?? 0.03;
+    this.tolRel = opts.tolRel ?? 2e-3;
+    this.safety = 0.9;
+    this.maxIters = 8;
+  }
+  setIntegrator(name){ this.integrator=name; this.useRK45=(name==="rk45"); }
+  setOptions(opts={}){ if("dtMin" in opts)this.dtMin=opts.dtMin; if("dtMax" in opts)this.dtMax=opts.dtMax; if("tolRel" in opts)this.tolRel=opts.tolRel; }
+  step(targetDt){
+    const sys=this.sys;
+    let dt=U.clamp(targetDt,this.dtMin,this.dtMax);
+    const y0=sys.state.y.slice(), t0=sys.state.t, E0=sys.energyTotal(y0);
+    let accepted=false, steps=0, lastErr=null;
+
+    while(!accepted && steps++<this.maxIters){
+      let res;
+      if (this.useRK45) res=Integrators.rk45(sys,t0,y0,dt);
+      else {
+        const fn=Integrators[this.integrator]||Integrators.rk4;
+        const out=fn(sys,t0,y0,dt); res={t:out[0],y:out[1],err:null};
+      }
+      // rope-string slack handling in Cartesian sub-steps for stability
+      if (sys instanceof DoublePendulumRopeSpring && sys.P.mode==='string'){
+        const nSub=Math.max(1,Math.ceil(dt/0.002)), subDt=dt/nSub;
+        for(let i=0;i<nSub;i++){
+          const tens=sys.tensionsFromAngles(res.y);
+          if (tens.T1<=0) sys.P.slack1=true;
+          if (tens.T2<=0) sys.P.slack2=true;
+          sys.stepCartesian(subDt);
+        }
+      }
+      const E1=sys.energyTotal(res.y), rel=Math.abs(E1-E0)/Math.max(1e-9,Math.abs(E0)); lastErr=res.err??rel;
+      const okEnergy = rel <= this.tolRel;
+      const okLocal  = this.useRK45 ? (res.err < this.tolRel) : true;
+      if (okEnergy && okLocal){
+        sys.state.t=res.t; sys.state.y=res.y; accepted=true;
+        // gentle dt growth
+        const fac = this.useRK45 ? this.safety*Math.pow(this.tolRel/Math.max(res.err,1e-16), 0.2)
+                                 : this.safety*Math.pow(this.tolRel/Math.max(rel,1e-16),    0.25);
+        dt = U.clamp(dt * U.clamp(fac,0.5,2.0), this.dtMin,this.dtMax);
+        sys.setDt(dt);
+      } else {
+        const fac = this.useRK45 ? this.safety*Math.pow(this.tolRel/Math.max(res.err,1e-16), 0.25)
+                                 : this.safety*Math.pow(this.tolRel/Math.max(rel,1e-16),    0.3);
+        dt = U.clamp(dt * U.clamp(fac,0.1,0.8), this.dtMin,this.dtMax);
+      }
+    }
+    if (!accepted){
+      const out=Integrators.euler(sys,t0,y0,Math.max(this.dtMin,targetDt*0.25));
+      sys.state.t=out[0]; sys.state.y=out[1];
+      sys.setDt(Math.max(this.dtMin,targetDt*0.5));
+    }
+    return sys.getDt();
+  }
+}
+
+/* =======================================================================================
+ *  LYAPUNOV (Benettin) & POINCARÉ
+ * =======================================================================================
+ */
+class LyapunovEstimator {
+  constructor(sys, opts={}) {
+    this.sys=sys; this.delta0=opts.delta0||1e-8; this.renorm=opts.renorm||0.1;
+    this.integrator=opts.integrator||"rk4";
+    this.accum=0; this.time=0;
+    this.shadow=cloneSystem(sys);
+    const y=U.copy(sys.state.y); y[0]+=this.delta0; y[1]-=this.delta0;
+    this.shadow.setStateArray(y); this.shadow.setDt(sys.getDt());
+  }
+  setIntegrator(n){ this.integrator=n; }
+  tick(){
+    stepSystemOnce(this.shadow,this.integrator);
+    const dt=this.sys.getDt(); this.time+=dt;
+    const d=distArr(this.shadow.state.y,this.sys.state.y);
+    if (this.time>=this.renorm){
+      if (d>0) this.accum += Math.log(d/this.delta0);
+      const dir=this.shadow.state.y.map((v,i)=>(v-this.sys.state.y[i])/(d||1));
+      const yNew=this.sys.state.y.map((v,i)=>v+dir[i]*this.delta0);
+      this.shadow.setStateArray(yNew); this.time=0;
+    }
+  }
+  value(){
+    const T=this.sys.state.t||0; if (T<=0) return null;
+    return this.accum/Math.max(T,1e-9);
+  }
+}
+function distArr(a,b){return Math.hypot(...a.map((v,i)=>v-b[i]))}
+function cloneSystem(sys){
+  if (sys instanceof DoublePendulumRigid){
+    const c=new DoublePendulumRigid({...sys.P}); c.state={t:sys.state.t,y:sys.state.y.slice()}; c.setDt(sys.getDt()); return c;
+  } else {
+    const c=new DoublePendulumRopeSpring({...sys.P}); c.state={t:sys.state.t,y:sys.state.y.slice()}; c.cart={p1:{...sys.cart.p1},v1:{...sys.cart.v1},p2:{...sys.cart.p2},v2:{...sys.cart.v2}}; c.setDt(sys.getDt()); return c;
+  }
+}
+function stepSystemOnce(sys,integrator){
+  const fn=Integrators[integrator]||Integrators.rk4;
+  const out=fn(sys,sys.state.t,sys.state.y,sys.getDt());
+  if (sys instanceof DoublePendulumRopeSpring && sys.P.mode==='string'){
+    const nSub=Math.max(1,Math.ceil(sys.getDt()/0.002)), subDt=sys.getDt()/nSub;
+    for(let i=0;i<nSub;i++){
+      const tens=sys.tensionsFromAngles(out[1]);
+      if (tens.T1<=0) sys.P.slack1=true;
+      if (tens.T2<=0) sys.P.slack2=true;
+      sys.stepCartesian(subDt);
+    }
+  }
+  sys.state.t=out[0]; sys.state.y=out[1];
+}
+class Poincare {
+  constructor(){ this.lastTh1=0; this.ready=false; this.buffer=[]; this.max=900; }
+  reset(){ this.lastTh1=0; this.ready=false; this.buffer.length=0; }
+  update(s){
+    const th1=s.th1, w1=s.w1||0;
+    if (!this.ready){ this.lastTh1=th1; this.ready=true; return; }
+    const up=(this.lastTh1<0 && th1>=0 && w1>0);
+    if (up){ this.buffer.push({th2:s.th2, w2:s.w2||0}); if (this.buffer.length>this.max) this.buffer.shift(); }
+    this.lastTh1=th1;
+  }
+}
+
+/* =======================================================================================
+ *  ENSEMBLE (clones)
+ * =======================================================================================
+ */
+class Ensemble {
+  constructor(baseSys,N=6,eps=1e-4,integrator="rk4"){
+    this.members=[]; this.integrator=integrator; this.eps=eps; this.reset(baseSys,N);
+  }
+  reset(baseSys,N=6){
+    this.members.length=0;
+    for(let i=0;i<N;i++){
+      const c=cloneSystem(baseSys); const y=U.copy(baseSys.state.y); const d=this.eps*(i+1);
+      y[0]+=d; y[1]-=d; c.setStateArray(y); c.setDt(baseSys.getDt());
+      this.members.push(c);
+    }
+  }
+  step(){ for(const m of this.members) stepSystemOnce(m,this.integrator); }
+  setDt(dt){ for(const m of this.members) m.setDt(dt); }
+  setIntegrator(n){ this.integrator=n; }
+}
+
+/* =======================================================================================
+ *  UI + RENDERING + ORCHESTRATION
+ * =======================================================================================
+ */
+const $=id=>document.getElementById(id);
+const Vw = {
+  view: $("view"), phase: $("phase"), energy: $("energy"), strobe: $("strobe"),
+  t:$("t"), th1:$("th1"), th2:$("th2"), w1:$("w1"), w2:$("w2"), Te:$("Te"), Ve:$("Ve"), Ee:$("Ee"), fps:$("fps"), lyap:$("lyap"),
+  play:$("play"), pause:$("pause"), step:$("step"), reset:$("reset"), random:$("random"), shot:$("shot"),
+  mode:$("mode"), integrator:$("integrator"), dt:$("dt"), slow:$("slow"),
+  g:$("g"), m1:$("m1"), m2:$("m2"), l1:$("l1"), l2:$("l2"), rm1:$("rm1"), rm2:$("rm2"),
+  b1:$("b1"), b2:$("b2"), qd:$("qd"), scale:$("scale"), trail:$("trail"),
+  ic_th1:$("ic_th1"), ic_th2:$("ic_th2"), ic_w1:$("ic_w1"), ic_w2:$("ic_w2"), applyIC:$("applyIC"),
+  dragSet:$("dragSet"), grab2:$("grab2"),
+  twin:$("twin"), twinDelta:$("twinDelta"), ensemble:$("ensemble"),
+  showPhase:$("showPhase"), showEnergy:$("showEnergy"), showStrobe:$("showStrobe"),
+  mag:$("mag"), magK:$("magK"),
+  sk:$("sk"), sc:$("sc"),
+  g_v:$("g_v"), m1_v:$("m1_v"), m2_v:$("m2_v"), l1_v:$("l1_v"), l2_v:$("l2_v"),
+  rm1_v:$("rm1_v"), rm2_v:$("rm2_v"), b1_v:$("b1_v"), b2_v:$("b2_v"), qd_v:$("qd_v"),
+  scale_v:$("scale_v"), trail_v:$("trail_v"), magK_v:$("magK_v"), sk_v:$("sk_v"), sc_v:$("sc_v"),
+  presetClassic:$("presetClassic"), presetWild:$("presetWild"), presetDamped:$("presetDamped"), presetRope:$("presetRope"), presetSpring:$("presetSpring"),
+  adaptive:$("adaptive"), dtMin:$("dtMin"), dtMax:$("dtMax"), etol:$("etol")
+};
+const ctx=Vw.view.getContext("2d"), pctx=Vw.phase.getContext("2d"), ectx=Vw.energy.getContext("2d"), sctx=Vw.strobe.getContext("2d");
+
+let PX=160, TRAIL=1500, SLOW=false, SHOW_PHASE=true, SHOW_EN=true, SHOW_STROBE=false;
+let running=false, frameCount=0, fpsTick=performance.now();
+const origin=()=>({x:Vw.view.width/2, y:120}); let magnet={x:0.5, y:0.5};
+
+let sys = new DoublePendulumRigid();
+let guard = new EnergyGuard(sys, {integrator:"rk4", dtMin:0.002, dtMax:0.02, tolRel:0.002});
+let lyap = new LyapunovEstimator(sys, { integrator:"rk4", delta0:1e-8, renorm:0.1 });
+let poincare = new Poincare();
+let ensemble = null;
+
+const bufA=[], bufB=[], bufTA=[], bufTB=[], ensBufs=[]; const eBuf=[]; const strobeBuf=[];
+
+function bindVal(range, label, fmt=x=>Number(x).toFixed(2)){ const f=()=>label.textContent=fmt(range.value); range.addEventListener("input",f); f(); }
+bindVal(Vw.g,Vw.g_v); bindVal(Vw.m1,Vw.m1_v); bindVal(Vw.m2,Vw.m2_v);
+bindVal(Vw.l1,Vw.l1_v); bindVal(Vw.l2,Vw.l2_v);
+bindVal(Vw.rm1,Vw.rm1_v); bindVal(Vw.rm2,Vw.rm2_v);
+bindVal(Vw.b1,Vw.b1_v,x=>Number(x).toFixed(3)); bindVal(Vw.b2,Vw.b2_v,x=>Number(x).toFixed(3));
+bindVal(Vw.qd,Vw.qd_v,x=>Number(x).toFixed(3));
+bindVal(Vw.scale,Vw.scale_v,x=>Number(x).toFixed(0)); bindVal(Vw.trail,Vw.trail_v,x=>Number(x).toFixed(0));
+bindVal(Vw.magK,Vw.magK_v,x=>Number(x).toFixed(0)); bindVal(Vw.sk,Vw.sk_v,x=>Number(x).toFixed(0)); bindVal(Vw.sc,Vw.sc_v,x=>Number(x).toFixed(2));
+
+function applyParams(){
+  PX=Number(Vw.scale.value); TRAIL=Number(Vw.trail.value); SLOW=Vw.slow.checked;
+  SHOW_PHASE=Vw.showPhase.checked; SHOW_EN=Vw.showEnergy.checked; SHOW_STROBE=Vw.showStrobe.checked;
+  const base={ g:Number(Vw.g.value), m1:Number(Vw.m1.value), m2:Number(Vw.m2.value), l1:Number(Vw.l1.value), l2:Number(Vw.l2.value),
+    rm1:Number(Vw.rm1.value), rm2:Number(Vw.rm2.value), b1:Number(Vw.b1.value), b2:Number(Vw.b2.value),
+    qd:Number(Vw.qd.value), mag:Vw.mag.checked, magK:Number(Vw.magK.value), magPos:magnet };
+  if (Vw.mode.value === "rigid"){ sys = new DoublePendulumRigid(base); }
+  else { sys = new DoublePendulumRopeSpring({ ...base, mode: Vw.mode.value }); }
+  // keep previous state if possible
+  // (not strictly needed; we reset via Apply IC)
+  const dt=Number(Vw.dt.value); sys.setDt(dt);
+  guard = new EnergyGuard(sys, { integrator: Vw.integrator.value, dtMin:Number(Vw.dtMin.value), dtMax:Number(Vw.dtMax.value), tolRel:Number(Vw.etol.value) });
+  lyap  = new LyapunovEstimator(sys, { integrator: Vw.integrator.value, delta0:1e-8, renorm:0.1 });
+  poincare.reset();
+  if (Vw.ensemble.checked){ ensemble = new Ensemble(sys, 6, 1e-4, Vw.integrator.value); ensBufs.length=ensemble.members.length; for(let i=0;i<ensBufs.length;i++) ensBufs[i]=[]; }
+  else ensemble=null;
+}
+function applyIC(){
+  const th1=Number(Vw.ic_th1.value), th2=Number(Vw.ic_th2.value), w1=Number(Vw.ic_w1.value), w2=Number(Vw.ic_w2.value);
+  if (sys instanceof DoublePendulumRigid) sys.setAngles(th1,th2,w1,w2);
+  else sys.setAngles(th1,th2,w1,w2);
+  bufA.length=bufB.length=bufTA.length=bufTB.length=0; eBuf.length=0; strobeBuf.length=0;
+  if (ensemble) ensemble.reset(sys,6);
+}
+function randomIC(){
+  const th1=U.rad((Math.random()*340)-170), th2=U.rad((Math.random()*340)-170), w1=(Math.random()*2)-1, w2=(Math.random()*2)-1;
+  sys.setAngles(th1,th2,w1,w2);
+  bufA.length=bufB.length=bufTA.length=bufTB.length=0; eBuf.length=0; strobeBuf.length=0;
+  if (ensemble) ensemble.reset(sys,6);
+}
+function pushTrail(buf,pt){ buf.push(pt); if (buf.length>TRAIL) buf.shift(); }
+function worldToCanvas(wx,wy){ const o=origin(); return { x:o.x+wx*PX, y:o.y+wy*PX }; }
+
+function drawBg(){
+  ctx.clearRect(0,0,Vw.view.width,Vw.view.height);
+  const o=origin();
+  const g=ctx.createRadialGradient(o.x,o.y,20,o.x,o.y,Vw.view.width*0.7);
+  g.addColorStop(0,"rgba(255,255,255,0.035)"); g.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=g; ctx.fillRect(0,0,Vw.view.width,Vw.view.height);
+}
+function drawMagnet(){
+  if (!Vw.mag.checked) return;
+  const p=worldToCanvas(magnet.x,magnet.y);
+  ctx.strokeStyle="rgba(255,209,102,0.85)"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,9,0,Math.PI*2); ctx.stroke();
+}
+function drawTrail(buf,rgb,fade=0.6){
+  if (buf.length<2) return; ctx.lineWidth=1.2;
+  for(let i=1;i<buf.length;i++){
+    const A=worldToCanvas(buf[i-1].x,buf[i-1].y), B=worldToCanvas(buf[i].x,buf[i].y);
+    const t=i/buf.length; ctx.strokeStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${(t*fade).toFixed(3)})`;
+    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+  }
+}
+function drawPend(s,rgb){
+  const p0=origin(), p1=worldToCanvas(s.x1,s.y1), p2=worldToCanvas(s.x2,s.y2);
+  ctx.lineWidth=2.2; ctx.strokeStyle="rgba(200,210,250,0.75)"; ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  ctx.fillStyle=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; ctx.beginPath(); ctx.arc(p1.x,p1.y,6,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(p2.x,p2.y,7,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle="#cdd3f0"; ctx.beginPath(); ctx.arc(p0.x,p0.y,5,0,Math.PI*2); ctx.fill();
+}
+function renderPhase(s){
+  if (!SHOW_PHASE){ pctx.clearRect(0,0,Vw.phase.width,Vw.phase.height); return; }
+  pctx.clearRect(0,0,Vw.phase.width,Vw.phase.height);
+  const cx=Vw.phase.width*0.5, cy=Vw.phase.height*0.5, kx=80, ky=60;
+  const x1=cx+s.th1*kx, y1=cy-(s.w1||0)*ky, x2=cx+s.th2*kx, y2=cy-(s.w2||0)*ky;
+  pctx.fillStyle="rgba(124,223,255,0.9)"; pctx.fillRect(x1-2,y1-2,3,3);
+  pctx.fillStyle="rgba(255,124,245,0.9)"; pctx.fillRect(x2-2,y2-2,3,3);
+}
+function renderEnergy(s){
+  if (!SHOW_EN){ ectx.clearRect(0,0,Vw.energy.width,Vw.energy.height); return; }
+  const w=Vw.energy.width,h=Vw.energy.height; ectx.clearRect(0,0,w,h);
+  eBuf.push({E:s.E,T:s.T,V:s.V}); if (eBuf.length>260) eBuf.shift();
+  const maxE=Math.max(1,...eBuf.map(d=>d.E)); const sx=w/260, map=v=>h-10-(v/maxE)*(h-20);
+  const draw=(k,clr)=>{ ectx.strokeStyle=clr; ectx.lineWidth=1.2; ectx.beginPath();
+    eBuf.forEach((d,i)=>{ const x=i*sx+6, y=map(d[k]); if (i===0) ectx.moveTo(x,y); else ectx.lineTo(x,y); }); ectx.stroke(); };
+  draw("E","#7cdfff"); draw("T","#46fca3"); draw("V","#ffd166");
+}
+function renderStrobe(){
+  if (!SHOW_STROBE){ sctx.clearRect(0,0,Vw.strobe.width,Vw.strobe.height); return; }
+  sctx.clearRect(0,0,Vw.strobe.width,Vw.strobe.height);
+  const cx=Vw.strobe.width*0.5, cy=Vw.strobe.height*0.5, kx=80, ky=60;
+  sctx.fillStyle="rgba(255,255,255,0.55)";
+  for (const q of strobeBuf){ const X=cx+q.th2*kx, Y=cy-q.w2*ky; sctx.fillRect(X,Y,1.5,1.5); }
+}
+
+function stepOnce(){
+  // Controller
+  const dtTarget = Number(Vw.dt.value) * (SLOW?0.5:1);
+  guard.setIntegrator(Vw.integrator.value);
+  guard.setOptions({ dtMin:Number(Vw.dtMin.value), dtMax:Number(Vw.dtMax.value), tolRel:Number(Vw.etol.value) });
+  const usedDt = guard.step(dtTarget);
+  // Ensemble + Lyapunov
+  if (ensemble){ ensemble.setIntegrator(Vw.integrator.value); ensemble.setDt(sys.getDt()); ensemble.step(); }
+  lyap.setIntegrator(Vw.integrator.value); lyap.tick();
+
+  const s=sys.sample();
+  pushTrail(bufA,{x:s.x1,y:s.y1}); pushTrail(bufB,{x:s.x2,y:s.y2});
+
+  // twin via Lyapunov shadow (render as twin)
+  const twinS = lyap.shadow.sample();
+  pushTrail(bufTA,{x:twinS.x1,y:twinS.y1}); pushTrail(bufTB,{x:twinS.x2,y:twinS.y2});
+
+  drawBg(); drawMagnet();
+  drawTrail(bufA,[124,223,255],0.6); drawTrail(bufB,[124,223,255],0.6); drawPend(s,[124,223,255]);
+  drawTrail(bufTA,[255,124,245],0.45); drawTrail(bufTB,[255,124,245],0.45); // twin
+  if (ensemble){
+    ctx.globalAlpha=0.55;
+    for(let i=0;i<ensemble.members.length;i++){
+      const sm=ensemble.members[i].sample();
+      if (!ensBufs[i]) ensBufs[i]=[];
+      pushTrail(ensBufs[i],{x:sm.x2,y:sm.y2});
+      drawTrail(ensBufs[i],[170,255,170],0.25);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // HUD
+  Vw.t.textContent = s.t.toFixed(3); Vw.th1.textContent=s.th1.toFixed(3); Vw.th2.textContent=s.th2.toFixed(3);
+  Vw.w1.textContent = (s.w1||0).toFixed(3); Vw.w2.textContent=(s.w2||0).toFixed(3);
+  Vw.Te.textContent = s.T.toFixed(3); Vw.Ve.textContent=s.V.toFixed(3); Vw.Ee.textContent=s.E.toFixed(3);
+  const lam = lyap.value(); Vw.lyap.textContent = (lam==null? "—" : lam.toFixed(3));
+
+  // Analysis plots
+  renderPhase(s); renderEnergy(s);
+  // Poincaré
+  if (SHOW_STROBE){
+    const prevLen=strobeBuf.length; poincare.update(s);
+    if (poincare.buffer.length>prevLen){ strobeBuf.push(poincare.buffer[poincare.buffer.length-1]); if (strobeBuf.length>900) strobeBuf.shift(); }
+  }
+  renderStrobe();
+
+  // FPS
+  frameCount++; const now=performance.now();
+  if (now-fpsTick>=1000){ Vw.fps.textContent=(frameCount*1000/(now-fpsTick)).toFixed(0); frameCount=0; fpsTick=now; }
+}
+
+/* =======================================================================================
+ *  INPUTS + PRESETS + EVENTS
+ * =======================================================================================
+ */
+Vw.play.onclick=()=>{running=true};
+Vw.pause.onclick=()=>{running=false};
+Vw.step.onclick =()=>{stepOnce()};
+Vw.reset.onclick=()=>{ bufA.length=bufB.length=bufTA.length=bufTB.length=0; eBuf.length=0; strobeBuf.length=0; };
+Vw.random.onclick=()=>{ randomIC(); };
+Vw.applyIC.onclick=()=>{ applyIC(); };
+Vw.shot.onclick=()=>{ const a=document.createElement("a"); a.href=Vw.view.toDataURL("image/png"); a.download="double_pendulum.png"; a.click(); };
+
+["change","input"].forEach(ev=>{
+  [Vw.mode,Vw.integrator,Vw.dt,Vw.g,Vw.m1,Vw.m2,Vw.l1,Vw.l2,Vw.rm1,Vw.rm2,Vw.b1,Vw.b2,Vw.qd,Vw.scale,Vw.trail,Vw.slow,Vw.mag,Vw.magK,Vw.sk,Vw.sc,Vw.showPhase,Vw.showEnergy,Vw.showStrobe,Vw.ensemble,Vw.adaptive,Vw.dtMin,Vw.dtMax,Vw.etol].forEach(el=>{
+    el.addEventListener(ev,()=>{ applyParams(); });
+  });
+});
+
+Vw.presetClassic.onclick=()=>{ 
+  Vw.mode.value="rigid"; Vw.integrator.value="rk4";
+  Vw.g.value=9.81; Vw.m1.value=1; Vw.m2.value=1; Vw.l1.value=1; Vw.l2.value=1;
+  Vw.rm1.value=0; Vw.rm2.value=0; Vw.b1.value=0.01; Vw.b2.value=0.01; Vw.qd.value=0;
+  Vw.scale.value=160; Vw.trail.value=1500; Vw.mag.checked=false;
+  applyParams(); applyIC();
+};
+Vw.presetWild.onclick=()=>{ 
+  Vw.mode.value="rigid"; Vw.integrator.value="rk4";
+  Vw.g.value=9.81; Vw.m1.value=1.2; Vw.m2.value=0.9; Vw.l1.value=1.1; Vw.l2.value=0.9;
+  Vw.rm1.value=0; Vw.rm2.value=0; Vw.b1.value=0; Vw.b2.value=0; Vw.qd.value=0; Vw.scale.value=170; Vw.trail.value=2200; 
+  Vw.mag.checked=true; Vw.magK.value=900;
+  applyParams(); randomIC();
+};
+Vw.presetDamped.onclick=()=>{ 
+  Vw.mode.value="rigid"; Vw.integrator.value="rk4";
+  Vw.g.value=9.81; Vw.m1.value=1; Vw.m2.value=1; Vw.l1.value=1; Vw.l2.value=1;
+  Vw.rm1.value=0; Vw.rm2.value=0; Vw.b1.value=0.08; Vw.b2.value=0.06; Vw.qd.value=0.12;
+  Vw.scale.value=160; Vw.trail.value=1200; Vw.mag.checked=false;
+  applyParams(); applyIC();
+};
+Vw.presetRope.onclick=()=>{ 
+  Vw.mode.value="string"; Vw.integrator.value="rk4";
+  Vw.g.value=9.81; Vw.m1.value=1; Vw.m2.value=1; Vw.l1.value=1.2; Vw.l2.value=1.2;
+  Vw.rm1.value=0; Vw.rm2.value=0; Vw.b1.value=0.01; Vw.b2.value=0.01; Vw.qd.value=0.02;
+  Vw.scale.value=160; Vw.trail.value=2000; Vw.mag.checked=false;
+  applyParams(); applyIC();
+};
+Vw.presetSpring.onclick=()=>{ 
+  Vw.mode.value="spring"; Vw.integrator.value="rk4";
+  Vw.g.value=9.81; Vw.m1.value=1; Vw.m2.value=1; Vw.l1.value=1; Vw.l2.value=1;
+  Vw.rm1.value=0; Vw.rm2.value=0; Vw.b1.value=0.01; Vw.b2.value=0.01; Vw.qd.value=0.02; Vw.sk.value=300; Vw.sc.value=1.0;
+  Vw.scale.value=160; Vw.trail.value=1500; Vw.mag.checked=false;
+  applyParams(); applyIC();
+};
+
+let dragging=false;
+function twoLinkIK(tx,ty,l1,l2){
+  const r2=tx*tx+ty*ty; const d=U.clamp((r2-l1*l1-l2*l2)/(2*l1*l2),-1,1); const th2r=Math.acos(d);
+  const phi=Math.atan2(tx,ty); const k1=l1+l2*Math.cos(th2r), k2=l2*Math.sin(th2r);
+  const th1=phi-Math.atan2(k2,k1); return { th1, th2: th1+th2r };
+}
+function onDown(e){ if (!Vw.dragSet.checked) return; dragging=true; onMove(e); }
+function onMove(e){
+  if (!dragging && !Vw.dragSet.checked) return;
+  const r=Vw.view.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top;
+  const o=origin(); const w={ x:(x-o.x)/PX, y:(y-o.y)/PX };
+  if (Vw.mode.value==="rigid" || Vw.mode.value==="spring"){
+    const l1=Number(Vw.l1.value), l2=Number(Vw.l2.value);
+    let th1, th2;
+    if (Vw.grab2.checked){ const res=twoLinkIK(w.x,w.y,l1,l2); th1=res.th1; th2=res.th2; }
+    else { th1=Math.atan2(w.x,w.y); th2 = th1 + (sys.state.y[1]-sys.state.y[0]); }
+    sys.setAngles(th1,th2,0,0);
+  } else {
+    if (Vw.grab2.checked){ sys.cart.p2={x:w.x,y:w.y}; sys.cart.v2=V.vec(0,0); }
+    else { sys.cart.p1={x:w.x,y:w.y}; sys.cart.v1=V.vec(0,0); }
+  }
+}
+function onUp(){ dragging=false; }
+function onContext(e){ e.preventDefault(); const r=Vw.view.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top; const o=origin(); magnet={ x:(x-o.x)/PX, y:(y-o.y)/PX }; applyParams(); }
+
+Vw.view.addEventListener("mousedown", onDown);
+window.addEventListener("mousemove", onMove);
+window.addEventListener("mouseup", onUp);
+Vw.view.addEventListener("contextmenu", onContext);
+Vw.view.addEventListener("wheel",(e)=>{e.preventDefault();const f=(e.deltaY<0)?1.05:0.95; PX=U.clamp(PX*f,60,400); Vw.scale.value=Math.round(PX); Vw.scale_v.textContent=Vw.scale.value;},{passive:false});
+
+window.addEventListener("keydown",(e)=>{
+  if (["INPUT","SELECT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+  if (e.key===" "){ running=!running; e.preventDefault(); }
+  else if (e.key.toLowerCase()==="s"){ stepOnce(); }
+  else if (e.key.toLowerCase()==="r"){ bufA.length=bufB.length=bufTA.length=bufTB.length=0; eBuf.length=0; strobeBuf.length=0; }
+  else if (e.key.toLowerCase()==="g"){ randomIC(); }
+  else if (e.key==="["){ Vw.dt.value=Math.max(0.001,Number(Vw.dt.value)-0.001).toFixed(3); applyParams(); }
+  else if (e.key==="]"){ Vw.dt.value=(Number(Vw.dt.value)+0.001).toFixed(3); applyParams(); }
+  else if (e.key.toLowerCase()==="p"){ Vw.shot.click(); }
+});
+
+function raf(){ if (running) stepOnce(); requestAnimationFrame(raf); }
+
+function init(){
+  applyParams();
+  applyIC();
+  raf();
+}
+init();
+</script>
+</body>
+</html>
