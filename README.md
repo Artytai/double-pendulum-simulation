@@ -93,7 +93,32 @@ RK4 was chosen over Euler integration due to:
 
 ---
 
-## How to Run
+---
 
-Simply open:
+## Why This Is Interesting
+
+The double pendulum is a classic example of how:
+
+> Simple equations can produce incredibly complex behavior.
+
+Even extremely small changes in initial angle can result in dramatically different motion over time — a hallmark of chaotic systems.
+
+---
+
+## Possible Extensions
+
+- 3D double pendulum
+- Triple pendulum
+- Phase space visualization
+- Lyapunov exponent calculation
+- Collision constraints
+- Elastic rods instead of rigid rods
+- GPU-based rendering
+
+---
+
+## Author
+
+Arthur Tai  
+Built as a computational physics and numerical simulation project.
 
